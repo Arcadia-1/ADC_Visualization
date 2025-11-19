@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>N-Bit SAR-ADC Visualization Simulator</title>
+    <!-- Load Tailwind CSS --><script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load D3.js for plotting --><script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        /* Define custom color variables based on D3 lines for guaranteed match */
+        :root {
+            --color-vin: #1F2937; /* Dark Gray/Black */
+            --color-vdac: #F97316; /* Orange 600 */
+            --color-vresidue: #EF4444; /* Red 500 */
+            --color-vtrial: #3B82F6; /* Blue 500 */
+        }
+
+        /* Custom styles for the visualization to look sleek */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fb;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1400px;
+            margin: auto;
+        }
+        .control-label {
+            font-weight: 600;
+            color: #374151;
+        }
+        .status-box {
+            background-color: #ffffff;
+            border: 1px solid #e5e7eb;
+            /* Enhanced Aesthetics */
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            /* REMOVED margin-top to achieve top alignment */
+        }
+        /* D3 Plot styles */
+        .chart-container {
+            background-color: #ffffff;
+            /* Enhanced Aesthetics */
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .line-vin { stroke: var(--color-vin); stroke-width: 2; } /* Adjusted from 4 to 2 */
+        .line-vdac { stroke: var(--color-vdac); stroke-width: 2; fill: none; }
+        .line-vresidue { stroke: var(--color-vresidue); stroke-width: 2; fill: none; }
+        .line-vtrial { stroke: var(--color-vtrial); stroke-width: 2; fill: none; }
+        
+        /* Text color classes matching D3 lines */
+        .text-vdac { color: var(--color-vdac); }
+        .text-vresidue { color: var(--color-vresidue); }
+
+        .axis text { font-size: 14px; }
+        .axis .domain, .axis .tick line { stroke: #D1D5DB; }
+        .axis-label { font-size: 16px; }
+
+        /* FIX: New layout for slider group: Label/Value on one row (no space-between), Slider on the next */
+        .slider-control-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .label-value-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 4px; /* Space between label row and slider */
+            flex-wrap: nowrap; /* Ensure elements don't wrap */
+        }
+        .slider-label {
+             /* Increased flex-grow on the label side to allow more text space */
+            flex-shrink: 0;
+            white-space: nowrap; 
+        }
+    </style>
+    <script>
+        // Set Tailwind config
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+</head>
+<body class="p-6">
+
+    <div class="container flex flex-col md:flex-row space-y-6 md:space-y-0 md:space-x-6">
+        
+        <!-- LEFT: Visualization (w-3/4 on large screens) --><div class="md:w-3/4 w-full flex flex-col space-y-4">
+            
+            <!-- Conversion Plot --><!-- Removed the margin-top from the chart-container to align it with the control box --><div id="chart" class="chart-container rounded-xl p-6 shadow-xl relative">
+                
+                <svg id="sar-adc-plot" width="100%" height="500"></svg>
+            </div>
+
+        </div>
+
+        <!-- RIGHT: Controls and Status (md:w-1/4, w-full on small screens) --><div class="md:w-1/4 w-full flex flex-col space-y-4"> 
+            
+            <!-- Controls and Status (Combined) --><!-- status-box no longer has margin-top for alignment --><div class="status-box rounded-xl p-5 shadow-xl">
+                <h3 class="text-xl font-extrabold mb-5 text-gray-800">Controls & Status</h3>
+                
+                <!-- Sliders for Vin and Resolution (N) --><div id="control-sliders" class="mb-6 border-b pb-4 border-gray-200 space-y-6">
+                    
+                    <!-- Analog Input (Vin) - LABEL and VALUE on single line. RANGE REMOVED. --><div class="slider-control-group">
+                        <div class="label-value-row">
+                            <label for="vin-slider" class="control-label text-gray-700 text-base slider-label">Analog V<sub>in</sub>:</label>
+                            <span id="vin-value" class="font-mono font-bold text-base text-gray-700 ml-1">0.6000 V</span>
+                        </div>
+                        <input type="range" id="vin-slider" min="0.0" max="1.0" step="0.0001" value="0.6" class="h-2 bg-blue-100 rounded-lg appearance-none cursor-pointer range-lg w-full accent-blue-500">
+                    </div>
+
+                    <!-- Bit Resolution (N) - LABEL and VALUE on single line. RANGE REMOVED. --><div class="slider-control-group">
+                        <div class="label-value-row">
+                            <label for="n-bits-slider" class="control-label text-gray-700 text-base slider-label">Resolution (N):</label>
+                            <span id="n-bits-value" class="font-mono font-bold text-base text-gray-700 ml-1">8 Bits</span>
+                        </div>
+                        <input type="range" id="n-bits-slider" min="1" max="18" step="1" value="8" class="h-2 bg-blue-100 rounded-lg appearance-none cursor-pointer range-lg w-full accent-blue-500" onchange="initializeState()">
+                    </div>
+                </div>
+
+                <!-- Live Status Display --><div id="live-status-display" class="mb-6 border-b pb-4 border-gray-200 space-y-2">
+                    <!-- V_DAC (Current DAC Voltage) --><p class="text-md flex justify-between items-center">
+                        <span class="font-semibold text-gray-700">V<sub>DAC</sub>:</span>
+                        <span id="overlay-vdac" class="font-mono text-lg font-bold text-vdac text-right">0.000000 V</span>
+                    </p>
+                    <!-- V_Residue (Residue Voltage) --><p class="text-md flex justify-between items-center mb-3">
+                        <span class="font-semibold text-gray-700">V<sub>Residue</sub>:</span>
+                        <span id="overlay-vresidue" class="font-mono text-lg font-bold text-vresidue text-right">0.600000 V</span>
+                    </p>
+                    <!-- Digital Code Label --><p class="text-sm font-semibold text-gray-700 mb-1 mt-3">Digital Code:</p>
+                    <!-- Digital Code Value (Scrollable Container) --><div class="overflow-x-auto rounded-lg bg-indigo-50 p-2 border border-indigo-200">
+                        <span id="overlay-code" class="font-mono text-xl font-extrabold text-purple-800 whitespace-nowrap block text-right">00000000</span>
+                    </div>
+                </div>
+
+                <!-- Control Buttons - Next Step on Top, Reset at Bottom --><div class="flex flex-col space-y-3">
+                    <!-- Step Control --><button id="next-step-button" class="w-full bg-green-500 text-white py-3 rounded-lg text-lg font-extrabold hover:bg-green-600 transition duration-150 shadow-lg disabled:bg-gray-400">
+                        Next Step (Test D<sub>i</sub>)
+                    </button>
+                    
+                    <!-- New Reset Button --><button id="reset-button" class="w-full bg-red-500 text-white py-3 rounded-lg text-lg font-extrabold hover:bg-red-600 transition duration-150 shadow-lg">
+                        Reset All
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Global Constants
+        const VREF = 1.0;
+        const MARGIN = { top: 30, right: 30, bottom: 50, left: 60 };
+        const SVG_HEIGHT = 500; 
+
+        // Global State
+        let state = {
+            N: 8,
+            Vin: 0.6,
+            currentStepIndex: 0, // 0='Sample', 1=Test D_N-1, ..., N=Test D0
+            D: [], // Digital code array (e.g., [D_N-1, ..., D0])
+            Vdac: 0.0,
+            LSB: 0,
+            isConversionComplete: false,
+            history: [], // For plotting
+        };
+
+        // --- Utility Functions ---
+
+        /**
+         * Calculates the DAC output voltage based on the current digital code.
+         * The code array is MSB-first: code[0] = D_N-1, code[N-1] = D0.
+         * @param {number[]} code - The digital code array.
+         * @param {number} N - The number of bits.
+         * @returns {number} The calculated Vdac.
+         */
+        function calculateVdac(code, N) {
+            let vdac = 0;
+            for (let i = 0; i < N; i++) {
+                // Index i: 0 is MSB (D_N-1), N-1 is LSB (D0).
+                // Weight for index i is Vref / 2^(i+1)
+                const weight = VREF / Math.pow(2, i + 1); 
+                vdac += code[i] * weight;
+            }
+            return vdac;
+        }
+
+        /**
+         * Initializes the state based on the current N and Vin.
+         * This function serves as the reset mechanism for the conversion.
+         */
+        function initializeState() {
+            // Read N from slider
+            let newN = parseInt(document.getElementById('n-bits-slider').value);
+            state.N = Math.max(1, Math.min(18, newN || 8));
+
+            // Read Vin from slider
+            state.Vin = parseFloat(document.getElementById('vin-slider').value);
+
+            state.LSB = VREF / Math.pow(2, state.N);
+            state.D = new Array(state.N).fill(0);
+            state.Vdac = 0.0;
+            state.currentStepIndex = 0; // Start at MSB index (0)
+            state.isConversionComplete = false;
+            
+            // Initial history entry for the 'Sample' point
+            state.history = [{
+                step: 0,
+                label: 'Sample',
+                Di: null, 
+                weight: null,
+                D: [...state.D],
+                Vdac: 0.0,
+                Vresidue: state.Vin,
+                Vtrial: null,
+                action: 'N/A'
+            }];
+
+            // Update N-bits display
+            document.getElementById('n-bits-value').textContent = `${state.N} Bits`;
+
+            updateUI();
+            drawPlot();
+            document.getElementById('next-step-button').disabled = false;
+        }
+
+        // --- Plotting Logic (D3.js) ---
+
+        /**
+         * Draws or updates the D3 plot.
+         */
+        function drawPlot() {
+            const svg = d3.select("#sar-adc-plot");
+            const width = svg.node().getBoundingClientRect().width;
+            const height = SVG_HEIGHT - MARGIN.top - MARGIN.bottom;
+
+            svg.selectAll("*").remove(); // Clear previous drawings
+
+            const g = svg.append("g")
+                .attr("transform", `translate(${MARGIN.left},${MARGIN.top})`);
+
+            // 1. Scales
+            // xSteps domain: ['Sample', D_N-1, D_N-2, ..., D0]
+            const xSteps = ['Sample'].concat(state.D.map((_, i) => `D${state.N - 1 - i}`));
+            const xScale = d3.scalePoint()
+                .domain(xSteps)
+                .range([0, width - MARGIN.left - MARGIN.right])
+                .padding(0.5);
+
+            const yScale = d3.scaleLinear()
+                .domain([0, 1.0]) // Vref is 1.0V
+                .range([height, 0]);
+
+            // 2. Axes
+            const xAxis = d3.axisBottom(xScale);
+            const yAxis = d3.axisLeft(yScale);
+
+            g.append("g")
+                .attr("class", "axis x-axis")
+                .attr("transform", `translate(0,${height})`)
+                .call(xAxis)
+                .append("text")
+                .attr("class", "axis-label")
+                .attr("fill", "#000")
+                .attr("x", (width - MARGIN.left - MARGIN.right) / 2)
+                .attr("y", MARGIN.bottom - 10)
+                .attr("text-anchor", "middle")
+                .attr("font-weight", "bold")
+                .text("Conversion Step"); // 横坐标标签
+
+            g.append("g")
+                .attr("class", "axis y-axis")
+                .call(yAxis)
+                .append("text")
+                .attr("class", "axis-label")
+                .attr("fill", "#000")
+                .attr("transform", "rotate(-90)")
+                .attr("y", -MARGIN.left + 15)
+                .attr("x", -height / 2)
+                .attr("text-anchor", "middle")
+                .attr("font-weight", "bold")
+                .text("Voltage / Residue (V)"); // 纵坐标标签
+
+            // 3. Data Preparation for D3
+            const plotData = state.history.map((d, i) => ({
+                step: i,
+                label: xSteps[i],
+                Vdac: d.Vdac,
+                Vresidue: d.Vresidue,
+                Vtrial: d.Vtrial,
+                xPos: xScale(xSteps[i]),
+                Di: d.Di, 
+                D: d.D, 
+            }));
+
+            // 4. Draw V_in (Constant Black Line)
+            g.append("line")
+                .attr("class", "line-vin")
+                .attr("x1", 0)
+                .attr("y1", yScale(state.Vin))
+                .attr("x2", width - MARGIN.left - MARGIN.right)
+                .attr("y2", yScale(state.Vin))
+                .attr("stroke-dasharray", "5,5")
+                .append("title").text(`Input Voltage (Vin): ${state.Vin.toFixed(6)} V`);
+
+            // 5. Draw V_DAC (Accepted Voltage - Yellow/Orange)
+            const vdacLine = d3.line()
+                .x(d => d.xPos)
+                .y(d => yScale(d.Vdac))
+                .curve(d3.curveStepAfter); 
+
+            g.append("path")
+                .datum(plotData)
+                .attr("class", "line-vdac")
+                .attr("d", vdacLine)
+                .append("title").text("Accepted DAC Voltage (V_DAC)");
+
+            // Add V_DAC data points
+            g.selectAll(".vdac-point")
+                .data(plotData.filter(d => d.step > 0)) // Start from D_N-1
+                .enter().append("circle")
+                .attr("class", "vdac-point")
+                .attr("cx", d => d.xPos)
+                .attr("cy", d => yScale(d.Vdac))
+                .attr("r", 4)
+                .attr("fill", "var(--color-vdac)") 
+                .append("title").text(d => `V_DAC: ${d.Vdac.toFixed(6)} V`);
+
+            // 6. Draw V_Residue (Red Line)
+            const vresidueLine = d3.line()
+                .x(d => d.xPos)
+                .y(d => yScale(d.Vresidue))
+                .curve(d3.curveLinear);
+
+            g.append("path")
+                .datum(plotData.filter(d => d.Vresidue !== null))
+                .attr("class", "line-vresidue")
+                .attr("d", vresidueLine)
+                .append("title").text("Residue Voltage (V_Residue)");
+
+            // Add V_Residue data points
+            g.selectAll(".vresidue-point")
+                .data(plotData)
+                .enter().append("circle")
+                .attr("class", "vresidue-point")
+                .attr("cx", d => d.xPos)
+                .attr("cy", d => yScale(d.Vresidue))
+                .attr("r", 4)
+                .attr("fill", "var(--color-vresidue)") 
+                .append("title").text(d => `V_Residue: ${d.Vresidue.toFixed(6)} V`);
+
+            // 7. Draw V_Trial (Blue Short Segments) and Labels
+            plotData.slice(1).forEach(d => {
+                if (d.Vtrial !== null) {
+                    const arrayIndex = state.N - 1 - d.Di; // Array index corresponding to bit D_i
+                    const bitValue = d.D[arrayIndex]; // Final bit value for D_i
+                    
+                    const startX = d.xPos - xScale.step() / 2;
+                    const endX = d.xPos;
+                    const yPos = yScale(d.Vtrial);
+                    
+                    // Draw the V_Trial line
+                    g.append("line")
+                        .attr("class", "line-vtrial")
+                        .attr("x1", startX)
+                        .attr("y1", yPos)
+                        .attr("x2", endX)
+                        .attr("y2", yPos)
+                        .attr("stroke-width", 3)
+                        .append("title").text(`Trial Voltage (V_Trial) at ${d.label}: ${d.Vtrial.toFixed(6)} V`);
+
+                    // Determine the result for the label
+                    // Only show D_i = bitValue
+                    const statusText = `D${d.Di} = ${bitValue}`;
+
+                    // Draw the result label above the line
+                    g.append("text")
+                        .attr("x", startX + (xScale.step() / 4)) // Centered over the segment
+                        .attr("y", yPos - 8) // Slightly above the line
+                        .attr("text-anchor", "middle")
+                        .attr("font-size", "12px") // Increased font size for better visibility
+                        .attr("fill", bitValue === 1 ? "#10B981" : "#EF4444") // Green for accepted, Red for rejected
+                        .attr("font-weight", "600")
+                        .text(statusText);
+                }
+            });
+
+            // 8. Highlight current step (if conversion is ongoing)
+            // The logic now checks if a comparison *can* be displayed based on the current step.
+            if (state.currentStepIndex >= 1 && state.currentStepIndex <= state.N) { 
+                
+                // The comparison number is currentStepIndex (1, 2, 3...)
+                const comparisonNumber = state.currentStepIndex;
+
+                // The boundary is between xSteps[currentStepIndex - 1] and xSteps[currentStepIndex].
+                const indexForBoundaryStart = state.currentStepIndex - 1;
+
+                const prevStepLabel = xSteps[indexForBoundaryStart]; 
+                const nextStepLabel = xSteps[indexForBoundaryStart + 1]; 
+
+                const xPosPrev = xScale(prevStepLabel);
+                const xPosNext = xScale(nextStepLabel);
+                
+                // Calculate the position exactly midway between the two labels (the boundary)
+                const xPos = (xPosPrev + xPosNext) / 2; 
+
+                // Vertical line for step boundary
+                g.append("line")
+                    .attr("x1", xPos)
+                    .attr("y1", 0)
+                    .attr("x2", xPos)
+                    .attr("y2", height)
+                    .attr("stroke", "#374151")
+                    .attr("stroke-dasharray", "2,2")
+                    .attr("stroke-width", 1);
+
+                // ADDED: Comparison Label
+                const comparisonText = `Comparison ${comparisonNumber}`;
+
+                g.append("text")
+                    .attr("x", xPos)
+                    .attr("y", -5) // Position slightly above the chart area (relative to g's Y translation)
+                    .attr("text-anchor", "middle")
+                    .attr("font-size", "14px")
+                    .attr("fill", "var(--color-vtrial)")
+                    .attr("font-weight", "bold")
+                    .text(comparisonText);
+            }
+        }
+
+        // --- UI Updates ---
+
+        /**
+         * Updates the status panel and residue display.
+         */
+        function updateUI() {
+            const arrayIndex = state.currentStepIndex;
+            const currentBitLabel = state.N - 1 - arrayIndex; // D_i label (N-1 down to 0)
+            const finalCode = state.D.map(b => b.toString()).join('');
+            const currentResidue = state.Vin - state.Vdac;
+
+            // 1. Update Combined Status Info (in the right panel)
+            document.getElementById('overlay-vdac').textContent = state.Vdac.toFixed(6) + ' V';
+            document.getElementById('overlay-vresidue').textContent = currentResidue.toFixed(6) + ' V';
+            document.getElementById('overlay-code').textContent = finalCode;
+            
+            // Update Vin slider value display (now in status box)
+            document.getElementById('vin-value').textContent = state.Vin.toFixed(4) + ' V';
+            
+            // Update N-bits display
+            document.getElementById('n-bits-value').textContent = `${state.N} Bits`;
+
+            // Update Next Step Button text
+            if (state.isConversionComplete) {
+                // MODIFIED: Simplified text to show "Complete!" and the code on the next line
+                document.getElementById('next-step-button').innerHTML = `
+                    <span class="text-xl font-extrabold">Complete!</span><br>
+                    <span class="text-base font-mono">${finalCode}</span>
+                `;
+                document.getElementById('next-step-button').disabled = true;
+            } else {
+                document.getElementById('next-step-button').innerHTML = `Next Step (Test D<sub>${currentBitLabel}</sub>)`;
+                document.getElementById('next-step-button').disabled = false;
+            }
+        }
+
+        // --- SAR-ADC Logic ---
+
+        /**
+         * Executes the next step in the SAR conversion.
+         */
+        function nextStep() {
+            if (state.isConversionComplete) {
+                return;
+            }
+
+            const arrayIndex = state.currentStepIndex; // Array index: 0 for D_N-1, N-1 for D0
+            const Di = state.N - 1 - arrayIndex; // Bit label: N-1 for MSB, 0 for LSB
+            
+            if (arrayIndex >= state.N) { 
+                state.isConversionComplete = true;
+                updateUI();
+                return;
+            }
+
+            // 1. Calculate the weight
+            const weight = VREF / Math.pow(2, arrayIndex + 1);
+            
+            // 2. Trial: Set D[arrayIndex] = 1 temporarily
+            let trialD = [...state.D];
+            trialD[arrayIndex] = 1;
+
+            // 3. Calculate Trial Voltage (V_DAC_trial)
+            const VdacTrial = calculateVdac(trialD, state.N);
+
+            // 4. Comparison
+            let comparisonResult;
+            let action;
+            let finalDacValue;
+            let finalD;
+            let resultText; // To store simple Accept/Reject status
+
+            if (state.Vin >= VdacTrial) {
+                // Accept: Keep D[arrayIndex] = 1
+                comparisonResult = `V_in (${state.Vin.toFixed(6)}) >= V_DAC_trial (${VdacTrial.toFixed(6)})`;
+                action = `Accept D${Di} = 1`;
+                finalDacValue = VdacTrial;
+                finalD = trialD; // Retain the '1'
+                resultText = 'Accepted';
+            } else {
+                // Reject: Set D[arrayIndex] = 0
+                comparisonResult = `V_in (${state.Vin.toFixed(6)}) < V_DAC_trial (${VdacTrial.toFixed(6)})`;
+                action = `Reject D${Di}, Set D${Di} = 0`; 
+                // Final DAC value is the previous one (trial bit is reset)
+                finalDacValue = state.Vdac;
+                finalD = [...state.D]; // D[arrayIndex] remains 0
+                resultText = 'Rejected';
+            }
+            
+            // 5. Update Global State
+            state.D = finalD;
+            state.Vdac = finalDacValue;
+            
+            // 6. Record history
+            state.history.push({
+                step: state.history.length,
+                label: `D${Di}`,
+                Di: Di,
+                weight: weight,
+                D: [...state.D],
+                Vdac: finalDacValue,
+                Vresidue: state.Vin - finalDacValue,
+                Vtrial: VdacTrial,
+                action: comparisonResult + '. ' + action,
+                resultText: resultText // Store simple result for plot label
+            });
+
+            state.currentStepIndex++; // Move to the next bit index
+
+            // 7. Check if conversion is complete
+            if (state.currentStepIndex === state.N) {
+                state.isConversionComplete = true;
+            }
+
+            // 8. Update UI/Plot
+            updateUI();
+            drawPlot();
+        }
+
+        // --- Event Listeners ---
+
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            // 1. Initial Setup
+            initializeState();
+
+            // 2. Vin Slider Control
+            const vinSlider = document.getElementById('vin-slider');
+            const nBitsSlider = document.getElementById('n-bits-slider');
+
+            vinSlider.addEventListener('input', (e) => {
+                // Update value display immediately
+                document.getElementById('vin-value').textContent = parseFloat(e.target.value).toFixed(4) + ' V';
+            });
+            vinSlider.addEventListener('change', () => {
+                // Re-initialize when Vin is changed (acts as reset)
+                initializeState();
+            });
+            
+            nBitsSlider.addEventListener('input', (e) => {
+                // Update N-bits display immediately on slide
+                document.getElementById('n-bits-value').textContent = `${e.target.value} Bits`;
+            });
+            nBitsSlider.addEventListener('change', () => {
+                // Re-initialize when N is changed (acts as reset)
+                initializeState();
+            });
+
+            // 3. Reset Button
+            document.getElementById('reset-button').addEventListener('click', initializeState);
+
+            // 4. Next Step Button
+            document.getElementById('next-step-button').addEventListener('click', nextStep);
+            
+            // 5. Responsive Plot on resize
+            window.addEventListener('resize', drawPlot);
+        });
+
+    </script>
+</body>
+</html>
+
