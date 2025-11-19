@@ -292,7 +292,7 @@
                 .attr("y", MARGIN.bottom - 10)
                 .attr("text-anchor", "middle")
                 .attr("font-weight", "bold")
-                .text("Conversion Step"); // 横坐标标签
+                .text("Conversion Step"); // Horizontal axis label
 
             g.append("g")
                 .attr("class", "axis y-axis")
@@ -305,7 +305,7 @@
                 .attr("x", -height / 2)
                 .attr("text-anchor", "middle")
                 .attr("font-weight", "bold")
-                .text("Voltage / Residue (V)"); // 纵坐标标签
+                .text("Voltage / Residue (V)"); // Vertical axis label
 
             // 3. Data Preparation for D3
             const plotData = state.history.map((d, i) => ({
@@ -319,6 +319,10 @@
                 D: d.D, 
             }));
 
+            // Find the last actual data point
+            const lastIndex = plotData.length - 1;
+            const lastDataPoint = plotData[lastIndex];
+
             // 4. Draw V_in (Constant Black Line)
             g.append("line")
                 .attr("class", "line-vin")
@@ -328,6 +332,16 @@
                 .attr("y2", yScale(state.Vin))
                 .attr("stroke-dasharray", "5,5")
                 .append("title").text(`Input Voltage (Vin): ${state.Vin.toFixed(6)} V`);
+
+            // --- V_in Label ---
+            g.append("text")
+                .attr("x", 5) // Just past the Y-axis
+                .attr("y", yScale(state.Vin) - 8) // Slightly above the line
+                .attr("text-anchor", "start")
+                .attr("font-size", "12px")
+                .attr("fill", "var(--color-vin)")
+                .attr("font-weight", "600")
+                .text("V_in");
 
             // 5. Draw V_DAC (Accepted Voltage - Yellow/Orange)
             const vdacLine = d3.line()
@@ -340,6 +354,18 @@
                 .attr("class", "line-vdac")
                 .attr("d", vdacLine)
                 .append("title").text("Accepted DAC Voltage (V_DAC)");
+            
+            // --- V_DAC Label (Follows the line) ---
+            if (lastDataPoint) {
+                 g.append("text")
+                    .attr("x", lastDataPoint.xPos + 5) // Offset slightly right from the last point's X position
+                    .attr("y", yScale(lastDataPoint.Vdac) - 8) // Slightly above the Vdac value
+                    .attr("text-anchor", "start")
+                    .attr("font-size", "12px")
+                    .attr("fill", "var(--color-vdac)")
+                    .attr("font-weight", "600")
+                    .text("V_DAC");
+            }
 
             // Add V_DAC data points
             g.selectAll(".vdac-point")
@@ -364,6 +390,19 @@
                 .attr("class", "line-vresidue")
                 .attr("d", vresidueLine)
                 .append("title").text("Residue Voltage (V_Residue)");
+
+            // --- V_Residue Label (Follows the line) ---
+            if (lastDataPoint) {
+                 g.append("text")
+                    .attr("x", lastDataPoint.xPos + 5) // Offset slightly right from the last point's X position
+                    .attr("y", yScale(lastDataPoint.Vresidue) - 8) // Slightly above the Vresidue value
+                    .attr("text-anchor", "start")
+                    .attr("font-size", "12px")
+                    .attr("fill", "var(--color-vresidue)")
+                    .attr("font-weight", "600")
+                    .text("V_Residue");
+            }
+
 
             // Add V_Residue data points
             g.selectAll(".vresidue-point")
@@ -419,8 +458,6 @@
                 
                 // The comparison number is currentStepIndex (1, 2, 3...)
                 const comparisonNumber = state.currentStepIndex;
-
-                // The boundary is between xSteps[currentStepIndex - 1] and xSteps[currentStepIndex].
                 const indexForBoundaryStart = state.currentStepIndex - 1;
 
                 const prevStepLabel = xSteps[indexForBoundaryStart]; 
@@ -432,27 +469,46 @@
                 // Calculate the position exactly midway between the two labels (the boundary)
                 const xPos = (xPosPrev + xPosNext) / 2; 
 
+                // Get the Vtrial value for the bit that was just tested
+                // Note: state.history[state.currentStepIndex] holds the result of the completed test.
+                const completedTestResult = state.history[state.currentStepIndex];
+                const VtrialValue = completedTestResult ? completedTestResult.Vtrial : 0.0;
+                
+                // --- Comparison Text Generation ---
+                // The actual comparison condition is V_in > V_DAC_trial.
+                const comparisonConditionText = `V_in > ${VtrialValue.toFixed(4)} V ?`;
+                
                 // Vertical line for step boundary
                 g.append("line")
                     .attr("x1", xPos)
-                    .attr("y1", 0)
+                    .attr("y1", 30) // Set start Y position to 30 (below the two text labels)
                     .attr("x2", xPos)
                     .attr("y2", height)
                     .attr("stroke", "#374151")
                     .attr("stroke-dasharray", "2,2")
                     .attr("stroke-width", 1);
 
-                // ADDED: Comparison Label
+                // ADDED: Comparison Label (Row 1)
                 const comparisonText = `Comparison ${comparisonNumber}`;
 
                 g.append("text")
                     .attr("x", xPos)
-                    .attr("y", -5) // Position slightly above the chart area (relative to g's Y translation)
+                    .attr("y", -5) // Position slightly above the chart area
                     .attr("text-anchor", "middle")
                     .attr("font-size", "14px")
                     .attr("fill", "var(--color-vtrial)")
                     .attr("font-weight", "bold")
                     .text(comparisonText);
+                
+                // ADDED: Comparison Condition Label (Row 2, based on Vtrial)
+                g.append("text")
+                    .attr("x", xPos)
+                    .attr("y", 15) // Offset 20px down from Comparison text
+                    .attr("text-anchor", "middle")
+                    .attr("font-size", "12px")
+                    .attr("fill", "var(--color-vtrial)")
+                    .attr("font-weight", "600")
+                    .text(comparisonConditionText);
             }
         }
 
