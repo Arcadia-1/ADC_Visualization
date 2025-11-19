@@ -86,6 +86,8 @@
             }
         }
     </script>
+    <!-- Busuanzi (不蒜子) 访问量统计脚本 -->
+    <script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
 </head>
 <body class="p-6">
 
@@ -98,18 +100,23 @@
                 <svg id="sar-adc-plot" width="100%" height="500"></svg>
             </div>
 
+            <!-- Removed the redundant Busuanzi footer and consolidated display to the control panel -->
         </div>
 
         <!-- RIGHT: Controls and Status (md:w-1/4, w-full on small screens) --><div class="md:w-1/4 w-full flex flex-col space-y-4"> 
             
-            <!-- Controls and Status (Combined) --><!-- status-box no longer has margin-top for alignment --><div class="status-box rounded-xl p-5 shadow-xl">
+            <!-- Controls and Status (Combined) --><div class="status-box rounded-xl p-5 shadow-xl">
                 <h3 class="text-xl font-extrabold mb-2 text-gray-800">Controls & Status</h3>
-                <!-- Visit counter (uses CountAPI: no server required) -->
-                <p class="text-sm text-gray-500 mb-4">Visits: <span id="visit-count" class="font-mono font-bold">—</span></p>
-                <!-- Busuanzi (不蒜子) page view display -->
-                <p class="text-sm text-gray-500 mb-4">页面 PV（不蒜子）: <span class="busuanzi_container_page_pv"><span class="busuanzi_value_page_pv">0</span></span></p>
                 
-                <!-- Sliders for Vin and Resolution (N) --><div id="control-sliders" class="mb-6 border-b pb-4 border-gray-200 space-y-6">
+                <!-- NEW: Busuanzi Page View Count -->
+                <p class="text-sm text-gray-500 mb-4">
+                    页面 PV (Busuanzi): 
+                    <span id="busuanzi_container_site_pv" class="font-mono font-bold">
+                        <span id="busuanzi_value_site_pv">—</span>
+                    </span>
+                </p>
+                
+                <div id="control-sliders" class="mb-6 border-b pb-4 border-gray-200 space-y-6">
                     
                     <!-- Analog Input (Vin) - LABEL and VALUE on single line. RANGE REMOVED. --><div class="slider-control-group">
                         <div class="label-value-row">
@@ -142,6 +149,7 @@
                         <span id="overlay-code" class="font-mono text-xl font-extrabold text-purple-800 whitespace-nowrap block text-right">00000000</span>
                     </div>
                 </div>
+
 
                 <!-- Control Buttons - Next Step on Top, Reset at Bottom --><div class="flex flex-col space-y-3">
                     <!-- Step Control --><button id="next-step-button" class="w-full bg-green-500 text-white py-3 rounded-lg text-lg font-extrabold hover:bg-green-600 transition duration-150 shadow-lg disabled:bg-gray-400">
@@ -336,6 +344,7 @@
                 .attr("fill", "var(--color-vdac)") 
                 .append("title").text(d => `V_DAC: ${d.Vdac.toFixed(6)} V`);
 
+
             // 6. Draw V_Residue (Red Line)
             const vresidueLine = d3.line()
                 .x(d => d.xPos)
@@ -358,6 +367,7 @@
                 .attr("r", 4)
                 .attr("fill", "var(--color-vresidue)") 
                 .append("title").text(d => `V_Residue: ${d.Vresidue.toFixed(6)} V`);
+
 
             // 7. Draw V_Trial (Blue Short Segments) and Labels
             plotData.slice(1).forEach(d => {
@@ -459,6 +469,7 @@
             
             // Update N-bits display
             document.getElementById('n-bits-value').textContent = `${state.N} Bits`;
+
 
             // Update Next Step Button text
             if (state.isConversionComplete) {
@@ -586,6 +597,7 @@
                 initializeState();
             });
 
+
             // 3. Reset Button
             document.getElementById('reset-button').addEventListener('click', initializeState);
 
@@ -596,33 +608,6 @@
             window.addEventListener('resize', drawPlot);
         });
 
-        // --- Visitor Count (CountAPI) ---
-        // This simple client-side snippet increments and reads a counter
-        // on each page load using https://countapi.xyz (no server required).
-        async function incrementVisitCount() {
-            try {
-                // Namespace/key: change if you'd like a custom counter namespace
-                const res = await fetch('https://api.countapi.xyz/hit/arcadia-1/adc_visualization', { cache: 'no-store' });
-                if (!res.ok) throw new Error('Network response was not ok');
-                const data = await res.json();
-                const count = data.value;
-                const el = document.getElementById('visit-count');
-                if (el) el.textContent = count.toLocaleString();
-            } catch (err) {
-                console.error('Visit counter error:', err);
-            }
-        }
-
-        // Fire the counter after DOM is ready (also safe to call here)
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', incrementVisitCount);
-        } else {
-            incrementVisitCount();
-        }
-
     </script>
-        <!-- Busuanzi script: displays counts in elements with classes like .busuanzi_value_page_pv -->
-        <script async src="https://busuanzi.ibruce.info/busuanzi.pure.mini.js"></script>
 </body>
 </html>
-
