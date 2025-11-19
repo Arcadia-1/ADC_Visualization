@@ -91,6 +91,12 @@
 </head>
 <body class="p-6">
 
+    <!-- NEW: Main Title -->
+    <header class="text-center mb-8">
+        <h1 class="text-3xl md:text-4xl font-extrabold text-gray-800">SAR-ADC Visualization Simulator</h1>
+        <p class="text-gray-500 mt-1">Interactive Successive Approximation Register ADC Demonstration</p>
+    </header>
+
     <div class="container flex flex-col md:flex-row space-y-6 md:space-y-0 md:space-x-6">
         
         <!-- LEFT: Visualization (w-3/4 on large screens) --><div class="md:w-3/4 w-full flex flex-col space-y-4">
@@ -100,23 +106,14 @@
                 <svg id="sar-adc-plot" width="100%" height="500"></svg>
             </div>
 
-            <!-- Removed the redundant Busuanzi footer and consolidated display to the control panel -->
         </div>
 
         <!-- RIGHT: Controls and Status (md:w-1/4, w-full on small screens) --><div class="md:w-1/4 w-full flex flex-col space-y-4"> 
             
             <!-- Controls and Status (Combined) --><div class="status-box rounded-xl p-5 shadow-xl">
-                <h3 class="text-xl font-extrabold mb-2 text-gray-800">Controls & Status</h3>
+                <h3 class="text-xl font-extrabold mb-5 text-gray-800">Controls & Status</h3>
                 
-                <!-- NEW: Busuanzi Page View Count -->
-                <p class="text-sm text-gray-500 mb-4">
-                    页面 PV (Busuanzi): 
-                    <span id="busuanzi_container_site_pv" class="font-mono font-bold">
-                        <span id="busuanzi_value_site_pv">—</span>
-                    </span>
-                </p>
-                
-                <div id="control-sliders" class="mb-6 border-b pb-4 border-gray-200 space-y-6">
+                <!-- Sliders for Vin and Resolution (N) --><div id="control-sliders" class="mb-6 border-b pb-4 border-gray-200 space-y-6">
                     
                     <!-- Analog Input (Vin) - LABEL and VALUE on single line. RANGE REMOVED. --><div class="slider-control-group">
                         <div class="label-value-row">
@@ -161,6 +158,17 @@
                     </button>
                 </div>
             </div>
+            
+            <!-- Busuanzi Page View Count (Right Bottom Corner) -->
+            <div class="mt-4 text-sm text-gray-500 flex justify-end space-x-4">
+                <span id="busuanzi_container_site_pv">
+                    Page Views: <span id="busuanzi_value_site_pv"></span>
+                </span>
+                <span id="busuanzi_container_site_uv">
+                    Unique Visitors: <span id="busuanzi_value_site_uv"></span>
+                </span>
+            </div>
+            
         </div>
 
     </div>
